@@ -6,11 +6,25 @@ use bindings::windows::{
     },
     TRUE,
 };
-use mouse_rs::Mouse;
+use mouse_rs::{types::keys::Keys, Mouse};
+use std::thread;
 
 mod tray_icon;
 
-fn main() -> Result<(), systray::Error> {
+fn main() {
+    let mouse_events_thread = thread::spawn(grab_and_resize);
+    match mouse_events_thread.join() {
+        Ok(_ok) => println!("All good"),
+        Err(e) => println!("{:?}", e),
+    }
+
+    if let Err(e) = show_tray_icon() {
+        println!("{:?}", e);
+        return;
+    }
+}
+
+fn grab_and_resize() -> Result<(), String> {
     let window: HWND;
     unsafe {
         window = GetForegroundWindow();
@@ -31,8 +45,7 @@ fn main() -> Result<(), systray::Error> {
     unsafe {
         let success = GetWindowRect(window, &mut rect);
         if success != TRUE {
-            println!("GetWindowRect failed!",);
-            return Ok(());
+            return Err("GetWindowRect failed!".to_string());
         }
     }
 
@@ -43,7 +56,9 @@ fn main() -> Result<(), systray::Error> {
         .move_to(rect.right - 6, rect.bottom - 6)
         .expect("Unable to move mouse");
 
-    show_tray_icon()
+    mouse.press(&Keys::LEFT).expect("Unable to press button");
+
+    Ok(())
 }
 
 fn get_window_title(window: HWND) -> Result<String, ()> {
