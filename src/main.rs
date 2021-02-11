@@ -53,7 +53,7 @@ fn grab_and_resize() -> Result<(), String> {
 
     let mouse = Mouse::new();
     mouse
-        .move_to(rect.right - 6, rect.bottom - 6)
+        .move_to(rect.right - 9, rect.bottom - 8)
         .expect("Unable to move mouse");
 
     mouse.press(&Keys::LEFT).expect("Unable to press button");
