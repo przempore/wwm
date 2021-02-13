@@ -1,3 +1,13 @@
+//importing in execute! macro
+#[macro_use]
+extern crate crossterm;
+
+use crossterm::cursor;
+use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::style::Print;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
+use std::io::stdout;
+
 use crate::tray_icon::show_tray_icon;
 use bindings::windows::{
     win32::{
@@ -12,8 +22,8 @@ use std::thread;
 mod tray_icon;
 
 fn main() {
-    let mouse_events_thread = thread::spawn(grab_and_resize);
-    match mouse_events_thread.join() {
+    let keyboard_events_thread = thread::spawn(listen_for_key_events);
+    match keyboard_events_thread.join() {
         Ok(_ok) => println!("All good"),
         Err(e) => println!("{:?}", e),
     }
@@ -72,4 +82,46 @@ fn get_window_title(window: HWND) -> Result<String, ()> {
         }
     }
     Err(())
+}
+
+fn listen_for_key_events() {
+    let mut stdout = stdout();
+    //going into raw mode
+    enable_raw_mode().unwrap();
+
+    //clearing the screen, going to top left corner and printing welcoming message
+    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0, 0), Print(r#"ctrl + q to exit, ctrl + h to print "Hello world", alt + t to print "crossterm is cool""#))
+            .unwrap();
+
+    //key detection
+    loop {
+        //going to top left corner
+        execute!(stdout, cursor::MoveTo(0, 0)).unwrap();
+
+        //matching the key
+        match read().unwrap() {
+            //i think this speaks for itself
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('h'),
+                modifiers: KeyModifiers::CONTROL,
+                //clearing the screen and printing our message
+                // }) => execute!(stdout, Clear(ClearType::All), Print("Hello world!")).unwrap(),
+            }) => match grab_and_resize() {
+                Ok(_ok) => println!("All good"),
+                Err(e) => println!("{:?}", e),
+            },
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('t'),
+                modifiers: KeyModifiers::ALT,
+            }) => execute!(stdout, Clear(ClearType::All), Print("crossterm is cool")).unwrap(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('q'),
+                modifiers: KeyModifiers::CONTROL,
+            }) => break,
+            _ => (),
+        }
+    }
+
+    //disabling raw mode
+    disable_raw_mode().unwrap();
 }
