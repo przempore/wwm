@@ -7,6 +7,13 @@ use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Print;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
 use std::io::stdout;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+};
 
 use crate::tray_icon::show_tray_icon;
 use bindings::windows::{
@@ -17,20 +24,27 @@ use bindings::windows::{
     TRUE,
 };
 use mouse_rs::{types::keys::Keys, Mouse};
-use std::thread;
 
 mod tray_icon;
 
 fn main() {
-    let keyboard_events_thread = thread::spawn(listen_for_key_events);
-    match keyboard_events_thread.join() {
-        Ok(_ok) => println!("All good"),
-        Err(e) => println!("{:?}", e),
-    }
+    let please_stop = Arc::new(AtomicBool::new(false));
 
+    // let keyboard_events_thread = thread::spawn(listen_for_key_events);
+    let keyboard_events_thread = thread::spawn({
+        let should_i_stop = please_stop.clone();
+        move || listen_for_key_events(should_i_stop.clone())
+    });
     if let Err(e) = show_tray_icon() {
         println!("{:?}", e);
         return;
+    }
+
+    please_stop.store(true, Ordering::SeqCst);
+
+    match keyboard_events_thread.join() {
+        Ok(_ok) => println!("All good"),
+        Err(e) => println!("{:?}", e),
     }
 }
 
@@ -84,7 +98,7 @@ fn get_window_title(window: HWND) -> Result<String, ()> {
     Err(())
 }
 
-fn listen_for_key_events() {
+fn listen_for_key_events(should_i_stop: Arc<AtomicBool>) {
     let mut stdout = stdout();
     //going into raw mode
     enable_raw_mode().unwrap();
@@ -95,6 +109,9 @@ fn listen_for_key_events() {
 
     //key detection
     loop {
+        if should_i_stop.load(Ordering::SeqCst) {
+            break;
+        }
         //going to top left corner
         execute!(stdout, cursor::MoveTo(0, 0)).unwrap();
 
